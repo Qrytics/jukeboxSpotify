@@ -1,7 +1,7 @@
 {
 	"name": "jukebox",
 	"productName": "Jukebox",
-	"version": "0.1.2",
+	"version": "1.0.0",
 	"description": "A Minecraft-style jukebox mini-player that opens by itself when Spotify does.",
 	"private": true,
 	"type": "module",
@@ -16,7 +16,9 @@
 		"dist:mac": "npm run build && electron-builder --mac",
 		"dist:win": "npm run build && electron-builder --win"
 	},
-	"engines": { "node": ">=22" },
+	"engines": {
+		"node": ">=22"
+	},
 	"dependencies": {
 		"@fontsource-variable/pixelify-sans": "^5.2.0"
 	},
@@ -32,22 +34,46 @@
 	"build": {
 		"appId": "com.qrytics.jukebox",
 		"productName": "Jukebox",
-		"directories": { "output": "release", "buildResources": "build" },
-		"files": ["electron/**", "dist/renderer/**", "package.json"],
+		"directories": {
+			"output": "release",
+			"buildResources": "build"
+		},
+		"files": [
+			"electron/**",
+			"dist/renderer/**",
+			"package.json"
+		],
 		"icon": "build/icon.png",
 		"mac": {
 			"category": "public.app-category.music",
 			"icon": "build/icon.png",
-			"target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+			"target": [
+				{
+					"target": "dmg",
+					"arch": [
+						"arm64",
+						"x64"
+					]
+				}
+			],
 			"extendInfo": {
 				"LSUIElement": true,
 				"NSAppleEventsUsageDescription": "Jukebox reads what Spotify is playing and sends it play, pause and skip commands."
 			}
 		},
-		"dmg": { "artifactName": "Jukebox-${arch}.${ext}" },
+		"dmg": {
+			"artifactName": "Jukebox-${arch}.${ext}"
+		},
 		"win": {
 			"icon": "build/icon.png",
-			"target": [{ "target": "nsis", "arch": ["x64"] }]
+			"target": [
+				{
+					"target": "nsis",
+					"arch": [
+						"x64"
+					]
+				}
+			]
 		},
 		"nsis": {
 			"oneClick": true,
