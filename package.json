@@ -1,7 +1,7 @@
 {
 	"name": "jukebox",
 	"productName": "Jukebox",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "A Minecraft-style jukebox mini-player that opens by itself when Spotify does.",
 	"private": true,
 	"type": "module",
