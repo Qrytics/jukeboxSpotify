@@ -106,6 +106,7 @@
 	}
 	function press() {
 		if (!hasTrack && !s.running) return;
+		playClick(); // the box itself is the most-pressed button, so it clicks too
 		window.jukebox?.control('toggle');
 	}
 
@@ -179,9 +180,10 @@
 
 	// ── UI click sound: the game's button click, from src/sounds/click.(ogg|mp3|wav) ──
 	// No file there means no sound (and no error), so the app works before the sound is added.
-	const clickUrl = Object.values(
-		import.meta.glob('./sounds/click.{ogg,mp3,wav}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>
-	)[0];
+	// WAV first: it decodes everywhere. MP3 needs Windows' media codecs, which are missing on Windows N/KN
+	// editions, where an MP3 click would be silent. Any of the three works if it is the only one present.
+	const clickFiles = import.meta.glob('./sounds/click.{wav,ogg,mp3}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+	const clickUrl = ['wav', 'ogg', 'mp3'].map((e) => clickFiles[`./sounds/click.${e}`]).find(Boolean);
 	/** On = click sounds are audible. Off = silent. Saved, and restored from the main process on load. */
 	let clickSounds = $state(true);
 	let warnedNoClick = false;
@@ -532,6 +534,9 @@
 	}
 
 	onMount(() => () => animTimers.forEach(clearTimeout));
+	// Windows' "Animation effects: off" (and battery saver) reaches the page as prefers-reduced-motion, which
+	// switches off the notes, the beat and the disc animation by design. Record it, so it is easy to rule in or out.
+	onMount(() => window.jukebox?.log?.('renderer ready', { reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches, clickSound: !!clickUrl }));
 	// Optional-call: a window still running an older preload has no onPrefs, and a throw here would stop
 	// the Spotify state below from ever being wired up.
 	onMount(() =>

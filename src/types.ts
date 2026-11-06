@@ -27,6 +27,8 @@ export interface JukeboxBridge {
 	/** Where the box is on its screen, as 0..1 fractions of the screen's width and height. */
 	onPlace(cb: (p: { fx: number; fy: number; cx?: number; dw?: number }) => void): () => void;
 	setOnTop(on: boolean): void;
+	/** Append a line to the app's log file (tray menu → Open log folder). */
+	log(...parts: unknown[]): void;
 	/** Start with the computer, so the jukebox is already running when Spotify opens. */
 	setLogin(on: boolean): void;
 	/** Quit the whole program. */

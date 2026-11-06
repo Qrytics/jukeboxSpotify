@@ -6,7 +6,8 @@
  * background, no title bar. Everything around the jukebox is click-through, so the window can be
  * large enough for the panel to pop open without blocking whatever is underneath it.
  */
-import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen } from 'electron';
+import { app, BrowserWindow, Menu, Tray, ipcMain, nativeImage, screen, shell } from 'electron';
+import { log, logPath } from './log.mjs';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,7 +53,9 @@ let tray = null;
 let last = null;
 let pinned = !!process.env.JUKEBOX_MOCK; // "Show jukebox" from the tray keeps it up without Spotify
 let dragFrom = null;
-const provider = createProvider();
+const provider = createProvider(log);
+/** True for a few seconds after a manual launch, so the jukebox shows even before Spotify is open. */
+let intro = false;
 
 const posFile = () => join(app.getPath('userData'), 'position.json');
 const prefsFile = () => join(app.getPath('userData'), 'prefs.json');
@@ -100,7 +103,8 @@ function setLogin(on, tellRenderer = false) {
 	savePrefs();
 	// Only an installed build registers a login item. Unpackaged (`npm run dev`), the executable is the
 	// bare Electron binary, which would launch an empty Electron window at every login.
-	if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: prefs.openAtLogin });
+	// --hidden: a start at login stays quiet; only a manual launch shows the jukebox right away.
+	if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: prefs.openAtLogin, args: ['--hidden'] });
 	refreshTray();
 	if (tellRenderer) win?.webContents.send('jukebox:prefs', { ...prefs });
 }
@@ -158,17 +162,30 @@ function createWindow() {
 	win.webContents.on('will-navigate', (e) => e.preventDefault());
 	win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 	win.on('closed', () => (win = null));
+	log('window created', { bounds: win.getBounds(), display: screen.getPrimaryDisplay().workArea, scale: screen.getPrimaryDisplay().scaleFactor });
+	win.webContents.on('did-fail-load', (_e, code, desc, url) => log('page failed to load', code, desc, url));
+	win.webContents.on('render-process-gone', (_e, d) => log('renderer crashed', d));
+	win.webContents.on('console-message', (...a) => {
+		const d = a[0] && typeof a[0] === 'object' && 'message' in a[0] ? a[0] : { level: a[1], message: a[2] };
+		if (d.level === 'warning' || d.level === 'error' || d.level >= 2) log('page console', d.message);
+	});
 
 	if (DEV_URL) void win.loadURL(DEV_URL);
 	else void win.loadFile(join(here, '..', 'dist', 'renderer', 'index.html'));
 }
 
 function updateVisibility() {
-	const want = pinned || !!last?.running;
+	const want = pinned || intro || !!last?.running;
 	if (want && !win) createWindow();
 	if (!win) return;
-	if (want && !win.isVisible()) win.showInactive();
-	if (!want && win.isVisible()) win.hide();
+	if (want && !win.isVisible()) {
+		win.showInactive();
+		log('window shown', { bounds: win.getBounds(), onTop: win.isAlwaysOnTop() });
+	}
+	if (!want && win.isVisible()) {
+		win.hide();
+		log('window hidden');
+	}
 }
 
 /** Everything the UI shows. The playback position is deliberately absent: it changes every second but
@@ -179,6 +196,8 @@ function onState(state) {
 	const changed = !last || visibleKey(last) !== visibleKey(state);
 	last = state;
 	if (!changed) return;
+	// `raw` and `session` only come from the Windows bridge: what Windows itself said about Spotify.
+	log('spotify', { running: state.running, status: state.status, title: state.title, artist: state.artist, error: state.error, volume: state.volume, raw: state.raw, session: state.session });
 	updateVisibility();
 	win?.webContents.send('jukebox:state', state);
 }
@@ -226,6 +245,7 @@ function menuTemplate() {
 				sendPlace();
 			}
 		},
+		{ label: 'Open log folder', click: () => shell.showItemInFolder(logPath()) },
 		{ type: 'separator' },
 		{ label: 'Quit Jukebox', role: 'quit' }
 	];
@@ -241,13 +261,37 @@ function buildTray() {
 	const icon = existsSync(file) ? nativeImage.createFromPath(file) : nativeImage.createEmpty();
 	tray = new Tray(icon);
 	tray.setToolTip('Jukebox');
+	// Clicking the tray icon shows the jukebox for a few seconds, wherever it is. On Windows a new tray icon
+	// sits in the "hidden icons" overflow, and this is how you find out the app is alive.
+	tray.on('click', () => {
+		intro = true;
+		updateVisibility();
+		setTimeout(() => {
+			intro = false;
+			updateVisibility();
+		}, 8000);
+	});
 	refreshTray();
 }
 
 app.whenReady().then(() => {
 	loadPrefs();
+	log('start', { version: app.getVersion(), platform: process.platform, arch: process.arch, packaged: app.isPackaged, electron: process.versions.electron, argv: process.argv.slice(1) });
 	buildTray();
 	provider.start(onState);
+	ipcMain.on('jukebox:log', (_e, ...a) => log('renderer', ...a));
+
+	// A manual launch shows the jukebox for a few seconds even if Spotify isn't open yet, so you can see
+	// it is running. A start at login (--hidden, or macOS's own flag) stays quiet.
+	const quiet = process.argv.includes('--hidden') || (process.platform === 'darwin' && app.getLoginItemSettings().wasOpenedAtLogin);
+	if (!quiet) {
+		intro = true;
+		updateVisibility();
+		setTimeout(() => {
+			intro = false;
+			updateVisibility();
+		}, 8000);
+	}
 
 	ipcMain.on('jukebox:ready', (e) => {
 		e.sender.send('jukebox:prefs', { ...prefs });

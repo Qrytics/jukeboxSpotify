@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('jukebox', {
 		return () => ipcRenderer.removeListener('jukebox:place', handler);
 	},
 	setOnTop: (on) => ipcRenderer.send('jukebox:on-top', !!on),
+	log: (...a) => ipcRenderer.send('jukebox:log', ...a),
 	setLogin: (on) => ipcRenderer.send('jukebox:login', !!on),
 	setSize: (scale, final) => ipcRenderer.send('jukebox:size', scale, !!final),
 	setClickSounds: (on) => ipcRenderer.send('jukebox:click-sounds', !!on),
