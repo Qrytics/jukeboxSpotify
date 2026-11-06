@@ -166,8 +166,9 @@ function createWindow() {
 	win.webContents.on('did-fail-load', (_e, code, desc, url) => log('page failed to load', code, desc, url));
 	win.webContents.on('render-process-gone', (_e, d) => log('renderer crashed', d));
 	win.webContents.on('console-message', (...a) => {
-		const d = a[0] && typeof a[0] === 'object' && 'message' in a[0] ? a[0] : { level: a[1], message: a[2] };
-		if (d.level === 'warning' || d.level === 'error' || d.level >= 2) log('page console', d.message);
+		const d = a[0] && typeof a[0] === 'object' && 'message' in a[0] ? a[0] : { level: a[1], message: a[2], line: a[3], sourceId: a[4] };
+		// sourceId:line pinpoints the renderer file and line, so a renderer error can be fixed from the log alone.
+		if (d.level === 'warning' || d.level === 'error' || d.level >= 2) log('page console', [d.sourceId, d.line].filter(Boolean).join(':'), d.message);
 	});
 
 	if (DEV_URL) void win.loadURL(DEV_URL);

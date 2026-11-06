@@ -9,7 +9,7 @@
 	 *
 	 *   click the block      play / pause
 	 *   two wooden buttons   previous / next, set into the right face of the box
-	 *   wooden slider        volume, set into the left face (macOS only; Windows gives no volume to read)
+	 *   wooden slider        volume, set into the left face (hidden while there is nothing local to turn up)
 	 *   scroll on the block  volume too
 	 *   drag the block       move it anywhere on screen
 	 *   hover the block      "Now playing: artist - song" floats above it (not over the buttons/slider)
@@ -287,7 +287,13 @@
 			y2: (32 + oy).toFixed(2)
 		};
 	});
-	onMount(() => window.jukebox?.onPlace?.((p) => (place = p)));
+	// Block body, not an expression: the assigned object must not be returned. The return value crosses the
+	// context bridge back into the preload, where cloning it throws (the page-log spam this once caused).
+	onMount(() =>
+		window.jukebox?.onPlace?.((p) => {
+			place = p;
+		})
+	);
 
 	// ── Volume label: floats right above the slider (inside .body, so it moves with the box) ──
 	let volLabel = $state<string | null>(null);
@@ -455,7 +461,7 @@
 		const t = setInterval(() => {
 			const id = noteId++;
 			// Louder, bigger: 0.4× at silence, 1× (portfolioSite's proportions) at 60%, 1.4× at full.
-			// Windows can't read the volume, so notes stay at 1×. Each note keeps the size it was born with.
+			// Without a volume to read (remote playback), notes stay at 1×. Each note keeps the size it was born with.
 			const m = s.volume === null ? 1 : 0.4 + s.volume;
 			notes = [...notes.slice(-6), { id, hue: Math.floor(Math.random() * 300), dx: Math.random() * 2 - 1, m }];
 			setTimeout(() => (notes = notes.filter((n) => n.id !== id)), 1700);
@@ -549,7 +555,12 @@
 	);
 
 	// While the knob is being dragged, keep the local volume: a poll result would yank it back.
-	onMount(() => window.jukebox?.onState((next) => (s = volDrag ? { ...next, volume: s.volume } : next)));
+	onMount(() =>
+		window.jukebox?.onState((next) => {
+		// Block body, so the state object is not returned across the bridge (see onPlace above).
+		s = volDrag ? { ...next, volume: s.volume } : next;
+	})
+);
 	// In a plain browser (no Electron) there is no bridge: show a demo so the skin can be looked at.
 	onMount(() => {
 		if (window.jukebox) return;

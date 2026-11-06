@@ -8,7 +8,7 @@ export interface SpotifyState {
 	artUrl: string | null;
 	durationMs: number;
 	positionMs: number;
-	/** 0..1, or null when the OS gives no way to read it (Windows). */
+	/** 0..1, or null when there is no local volume to read (Windows with no local session). */
 	volume: number | null;
 	error: 'permission' | 'unavailable' | null;
 }
