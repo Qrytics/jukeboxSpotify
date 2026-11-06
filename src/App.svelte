@@ -32,6 +32,8 @@
 	 * on it (x 11 + 3 wide, y 10.7 + 3.3 tall), touching the brown with no gap.
 	 */
 	const COG = iconPadSprite('cog');
+	const SPOTIFY = iconPadSprite('spotify');
+	const MINIMIZE = iconPadSprite('minimize');
 	const TOOL_Y = 10.7;
 	const NO_SPOTIFY: SpotifyState = { running: false, status: 'stopped', title: '', artist: '', album: '', artUrl: null, durationMs: 0, positionMs: 0, volume: null, error: null };
 
@@ -200,6 +202,16 @@
 		a.volume = 0.6;
 		a.addEventListener('error', () => console.warn('Jukebox: the click sound failed to load', clickUrl), { once: true });
 		a.play().catch((err) => console.warn('Jukebox: the click sound would not play', err));
+	}
+
+	/** Bring the Spotify window to the front. */
+	function focusSpotify() {
+		window.jukebox?.focusSpotify?.();
+	}
+	/** Tuck the jukebox away; clicking its tray / menu-bar icon brings it back. */
+	function minimize() {
+		window.jukebox?.minimize?.();
+		overBlock = false;
 	}
 
 	function toggleOnTop() {
@@ -674,8 +686,8 @@
 
 		<!-- Same viewBox and the faces' own matrices as the cube, so the controls lie flat on its faces. -->
 		<svg class="pads" viewBox="0 0 32 32" shape-rendering="crispEdges">
-			{#snippet tool(x: number, label: string, sprite: Run[], act: () => void, pressed?: boolean)}
-				<g transform="translate({x} {TOOL_Y}) scale(0.3)">
+			{#snippet tool(x: number, y: number, label: string, sprite: Run[], act: () => void, pressed?: boolean)}
+				<g transform="translate({x} {y}) scale(0.3)">
 					<g
 						class="pad"
 						role="button"
@@ -698,9 +710,14 @@
 				</g>
 			{/snippet}
 
-			<!-- Left face, bottom right: the settings cog. -->
+			<!-- Left face: the settings cog at the bottom right, the Spotify mark at the top right. -->
 			<g transform="matrix(1 0.5 0 1 0 8)">
-				{@render tool(11, 'Settings', COG, openMenu)}
+				{@render tool(11, TOOL_Y, 'Settings', COG, openMenu)}
+				{@render tool(11, 2.2, 'Open Spotify', SPOTIFY, focusSpotify)}
+			</g>
+			<!-- Lid, left corner: minimize. The top face's own matrix, so it lies on the lid in perspective. -->
+			<g transform="matrix(1 0.5 -1 0.5 16 0)">
+				{@render tool(2, TOOL_Y, 'Minimize jukebox', MINIMIZE, minimize)}
 			</g>
 
 			{#if s.volume !== null}

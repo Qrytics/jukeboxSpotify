@@ -56,6 +56,8 @@ let dragFrom = null;
 const provider = createProvider(log);
 /** True for a few seconds after a manual launch, so the jukebox shows even before Spotify is open. */
 let intro = false;
+/** The user pressed the lid's minimize button: stay hidden until the tray icon is clicked. */
+let minimized = false;
 
 const posFile = () => join(app.getPath('userData'), 'position.json');
 const prefsFile = () => join(app.getPath('userData'), 'prefs.json');
@@ -176,7 +178,7 @@ function createWindow() {
 }
 
 function updateVisibility() {
-	const want = pinned || intro || !!last?.running;
+	const want = !minimized && (pinned || intro || !!last?.running);
 	if (want && !win) createWindow();
 	if (!win) return;
 	if (want && !win.isVisible()) {
@@ -265,6 +267,7 @@ function buildTray() {
 	// Clicking the tray icon shows the jukebox for a few seconds, wherever it is. On Windows a new tray icon
 	// sits in the "hidden icons" overflow, and this is how you find out the app is alive.
 	tray.on('click', () => {
+		minimized = false;
 		intro = true;
 		updateVisibility();
 		setTimeout(() => {
@@ -322,6 +325,8 @@ app.whenReady().then(() => {
 	});
 	ipcMain.on('jukebox:quit', () => app.quit());
 	ipcMain.on('jukebox:control', (_e, cmd) => provider.control(cmd));
+		ipcMain.on('jukebox:focus-spotify', () => provider.control('focus'));
+		ipcMain.on('jukebox:minimize', () => ((minimized = true), updateVisibility()));
 	ipcMain.on('jukebox:volume', (_e, v) => provider.setVolume(v));
 	ipcMain.on('jukebox:interactive', (_e, on) => {
 		if (!win) return;
@@ -346,6 +351,6 @@ app.whenReady().then(() => {
 	});
 });
 
-app.on('second-instance', () => updateVisibility());
+app.on('second-instance', () => ((minimized = false), updateVisibility()));
 app.on('window-all-closed', () => {}); // stay in the tray
 app.on('before-quit', () => provider.stop());

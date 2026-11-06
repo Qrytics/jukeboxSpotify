@@ -26,6 +26,19 @@ const COMMANDS = {
 	prev: 'tell application "Spotify" to previous track'
 };
 
+const HIDE_IF_SHOWN = `
+tell application "System Events"
+	if exists process "Spotify" then
+		tell process "Spotify"
+			if visible and (count of windows) > 0 then
+				set visible to false
+				return "hid"
+			end if
+		end tell
+	end if
+end tell
+return "open"`;
+
 const num = (v) => {
 	const n = Number(String(v).replace(',', '.'));
 	return Number.isFinite(n) ? n : 0;
@@ -103,6 +116,14 @@ export function createMacProvider() {
 			clearTimeout(timer);
 		},
 		async control(cmd) {
+			// A toggle. Spotify showing a window: hide it (like Cmd+H). Otherwise do what clicking Spotify in the
+			// Dock does: raise the window, reopen it if it was closed (AppleScript's `activate` does nothing for
+			// a running app with no window), launch it if quit. If System Events is refused, it only ever opens.
+			if (cmd === 'focus') {
+				const { stdout } = await run('osascript', ['-e', HIDE_IF_SHOWN], { timeout: 4000 }).catch(() => ({ stdout: '' }));
+				if (stdout.trim() !== 'hid') await run('open', ['-a', 'Spotify'], { timeout: 4000 }).catch(() => {});
+				return;
+			}
 			if (!COMMANDS[cmd]) return;
 			await run('osascript', ['-e', COMMANDS[cmd]], { timeout: 4000 }).catch(() => {});
 			clearTimeout(timer);

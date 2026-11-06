@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('jukebox', {
 	},
 	control: (cmd) => ipcRenderer.send('jukebox:control', cmd),
 	setVolume: (v) => ipcRenderer.send('jukebox:volume', v),
+	focusSpotify: () => ipcRenderer.send('jukebox:focus-spotify'),
+	minimize: () => ipcRenderer.send('jukebox:minimize'),
 	setInteractive: (on) => ipcRenderer.send('jukebox:interactive', !!on),
 	onPrefs(cb) {
 		const handler = (_e, prefs) => cb(prefs);

@@ -60,24 +60,35 @@ export function padSprite(dir: 'prev' | 'next'): Run[] {
 /**
  * A 10×11 wooden button with an icon, for the tools on the left face (drawn at 0.3 scale, so about the
  * size of the arrow buttons). Same plank look as `padSprite`; the icon sits in the 8×9 inside the rim.
- *   cog – a cogwheel
+ *   cog      – a cogwheel
+ *   minimize – a small solid square in the corner of a faint frame (the "shrink to the corner" glyph)
+ *   spotify  – the round Spotify mark: a dark-brown disc with three wood-coloured arcs
  */
-export function iconPadSprite(_icon: 'cog'): Run[] {
+export function iconPadSprite(icon: 'cog' | 'minimize' | 'spotify'): Run[] {
 	const W = 10;
 	const H = 11;
 	const plank = (y: number) => (y <= 3 ? '#b9774b' : y <= 6 ? '#a7643f' : '#94562f');
 	const INK = '#24120a';
 	const px = new Map<string, string>();
-	// 7×7, symmetric about its centre pixel: 1px teeth N/E/S/W, 2px teeth at the four corners (thicker
-	// than a single pixel, much slimmer than a 2×2 block). The middle is one open pixel ringed by four
-	// mid-brown ones ('+'): a hub that is lighter than the black ring but not a blank hole.
-	const GEAR = ['##.#.##', '.#####.', '.##+##.', '##+.+##', '.##+##.', '.#####.', '##.#.##'];
-	GEAR.forEach((row, gy) =>
-		[...row].forEach((ch, gx) => {
-			if (ch === '#') px.set(`${1 + gx},${2 + gy}`, INK);
-			else if (ch === '+') px.set(`${1 + gx},${2 + gy}`, '#7a4a2c');
-		})
-	);
+	/** Stamp a character grid into the icon area at (ox, oy); `key` maps a character to a colour. */
+	const stamp = (rows: string[], ox: number, oy: number, key: Record<string, string>) =>
+		rows.forEach((row, gy) =>
+			[...row].forEach((ch, gx) => {
+				if (key[ch]) px.set(`${ox + gx},${oy + gy}`, key[ch]);
+			})
+		);
+	if (icon === 'cog') {
+		// 7×7, symmetric about its centre pixel: 1px teeth N/E/S/W, 2px teeth at the four corners (thicker
+		// than a single pixel, much slimmer than a 2×2 block). The middle is one open pixel ringed by four
+		// mid-brown ones ('+'): a hub that is lighter than the black ring but not a blank hole.
+		stamp(['##.#.##', '.#####.', '.##+##.', '##+.+##', '.##+##.', '.#####.', '##.#.##'], 1, 2, { '#': INK, '+': '#7a4a2c' });
+	} else if (icon === 'minimize') {
+		// A 7×7 frame drawn in mid-brown ('f'), with a 2×2 ink square ('#') tucked into its bottom-left corner.
+		stamp(['fffffff', 'f.....f', 'f.....f', 'f.....f', 'f##...f', 'f##...f', 'fffffff'], 1, 2, { f: '#6b3d24', '#': INK });
+	} else {
+		// 8×8 disc ('g' ink) with three arcs ('d' wood): long on top, shorter below, like the logo.
+		stamp(['..gggg..', '.gggggg.', 'gddddddg', 'gggggggg', 'ggddddgg', 'gggggggg', '.ggddgg.', '..gggg..'], 1, 1, { g: INK, d: '#b9774b' });
+	}
 
 	return runs(
 		Array.from({ length: H }, (_, y) =>

@@ -17,6 +17,10 @@ export interface JukeboxBridge {
 	onState(cb: (s: SpotifyState) => void): () => void;
 	control(cmd: 'toggle' | 'next' | 'prev'): void;
 	setVolume(v: number): void;
+	/** Bring the Spotify window to the front. */
+	focusSpotify(): void;
+	/** Hide the jukebox until its tray / menu-bar icon is clicked. */
+	minimize(): void;
 	setInteractive(on: boolean): void;
 	/** Saved preferences, sent when the window loads and whenever the tray menu changes them. */
 	onPrefs(cb: (p: { onTop: boolean; openAtLogin: boolean; clickSounds?: boolean; boxScale?: number }) => void): () => void;

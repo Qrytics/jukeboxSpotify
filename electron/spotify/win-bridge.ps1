@@ -152,6 +152,36 @@ public static class SpotifyVolume {
     }
 }
 '@
+# Bring Spotify's window to the front. Spotify.exe has several processes; the one with a window is the player.
+# Minimized to the tray it has no window at all, so fall back to the spotify: protocol, which Windows hands
+# to the running app and which makes it show itself.
+$FocusCs = @'
+using System;
+using System.Runtime.InteropServices;
+public static class WinFocus {
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+}
+'@
+$FocusOK = $false
+try { Add-Type -TypeDefinition $FocusCs -Language CSharp; $FocusOK = $true } catch { }
+
+function Focus-Spotify {
+	$p = Get-Process -Name Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+	if ($p -and $FocusOK) {
+		# A toggle: a window that is showing gets minimized; a minimized one is restored and raised.
+		if ([WinFocus]::IsIconic($p.MainWindowHandle)) {
+			[void][WinFocus]::ShowWindow($p.MainWindowHandle, 9)
+			[void][WinFocus]::SetForegroundWindow($p.MainWindowHandle)
+		} else {
+			[void][WinFocus]::ShowWindow($p.MainWindowHandle, 6)
+		}
+	} else {
+		Start-Process 'spotify:'
+	}
+}
+
 $VolumeOK = $false
 try {
 	Add-Type -TypeDefinition $VolumeCs -Language CSharp

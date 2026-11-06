@@ -82,7 +82,7 @@ export function createWinProvider(log = () => {}) {
 			child?.kill();
 		},
 		control(cmd) {
-			if (['toggle', 'next', 'prev'].includes(cmd)) send(cmd);
+			if (['toggle', 'next', 'prev', 'focus'].includes(cmd)) send(cmd);
 		},
 		setVolume(v) {
 		const n = Math.max(0, Math.min(1, Number(v)));
