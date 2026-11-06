@@ -34,15 +34,27 @@
 		"productName": "Jukebox",
 		"directories": { "output": "release", "buildResources": "build" },
 		"files": ["electron/**", "dist/renderer/**", "package.json"],
+		"icon": "build/icon.png",
 		"mac": {
 			"category": "public.app-category.music",
-			"target": ["dmg", "zip"],
+			"icon": "build/icon.png",
+			"target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
 			"extendInfo": {
 				"LSUIElement": true,
 				"NSAppleEventsUsageDescription": "Jukebox reads what Spotify is playing and sends it play, pause and skip commands."
 			}
 		},
-		"win": { "target": ["nsis"] },
-		"nsis": { "oneClick": true, "perMachine": false }
+		"dmg": { "artifactName": "Jukebox-${arch}.${ext}" },
+		"win": {
+			"icon": "build/icon.png",
+			"target": [{ "target": "nsis", "arch": ["x64"] }]
+		},
+		"nsis": {
+			"oneClick": true,
+			"perMachine": false,
+			"runAfterFinish": true,
+			"shortcutName": "Jukebox",
+			"artifactName": "Jukebox-Setup.${ext}"
+		}
 	}
 }

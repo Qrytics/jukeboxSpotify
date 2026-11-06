@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
-	import { NOTE, disc, iconPadSprite, knobSprite, padSprite, sideFace, topFace, type Run } from './pixels';
+	import { NOTE, iconPadSprite, knobSprite, padSprite, sideFace, songDisc, topFace, type Run } from './pixels';
 	import type { SpotifyState } from './types';
 
 	/**
@@ -393,10 +393,7 @@
 	function discFor(key: string): Run[] {
 		let d = discCache.get(key);
 		if (!d) {
-			let h = 2166136261;
-			for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
-			const hue = (h >>> 0) % 360;
-			d = disc([`hsl(${hue} 80% 62%)`, `hsl(${(hue + 40) % 360} 85% 32%)`], (h >>> 0) % 1000);
+			d = songDisc(key);
 			discCache.set(key, d);
 			if (discCache.size > 30) discCache.delete(discCache.keys().next().value!);
 		}
@@ -1078,15 +1075,10 @@
 	}
 
 	/* Shown while the pointer is over the box, a button or the slider (so moving between them never
-	   flickers), while the slider is being dragged, while the box is dragged, or when a control has
-	   keyboard focus. */
-	.rig:has(.block:hover, .pad:hover, .vol:hover, .vol:active, .block:focus-visible, .pad:focus-visible, .vol:focus-visible),
-	.rig--drag .pads {
-		--controls: 1;
-	}
-
-	.rig:has(.block:hover, .pad:hover, .vol:hover, .vol:active, .block:focus-visible, .pad:focus-visible, .vol:focus-visible) .pads,
-	.rig--drag .pads {
+	   flickers), while the slider is being dragged, or when a control has keyboard focus. NOT while the
+	   box itself is being dragged: they fade out for the move, and fade back in on release only if the
+	   pointer is still over the jukebox (the :hover rules below simply apply again). */
+	.rig:not(.rig--drag):has(.block:hover, .pad:hover, .vol:hover, .vol:active, .block:focus-visible, .pad:focus-visible, .vol:focus-visible) .pads {
 		opacity: 1;
 	}
 
@@ -1098,10 +1090,8 @@
 		outline: none;
 	}
 
-	.rig:has(.block:hover, .pad:hover, .vol:hover, .vol:active, .block:focus-visible, .pad:focus-visible, .vol:focus-visible) .pad,
-	.rig:has(.block:hover, .pad:hover, .vol:hover, .vol:active, .block:focus-visible, .pad:focus-visible, .vol:focus-visible) .vol,
-	.rig--drag .pad,
-	.rig--drag .vol {
+	.rig:not(.rig--drag):has(.block:hover, .pad:hover, .vol:hover, .vol:active, .block:focus-visible, .pad:focus-visible, .vol:focus-visible) .pad,
+	.rig:not(.rig--drag):has(.block:hover, .pad:hover, .vol:hover, .vol:active, .block:focus-visible, .pad:focus-visible, .vol:focus-visible) .vol {
 		pointer-events: auto;
 	}
 

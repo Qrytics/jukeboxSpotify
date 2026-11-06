@@ -136,23 +136,137 @@ export function topFace(): Run[] {
 	);
 }
 
-/** A record: a pixel circle with grooves and a sheen, and a two-colour label round a spindle hole. */
-export function disc(label: [string, string], seed: number): Run[] {
+// ── Music discs ──
+// A disc is a vinyl body in one of several colours, with artwork on it in one of several designs. The
+// pair is picked from a hash of the song, so a song always gets the same disc and different songs
+// mostly differ: 14 palettes × 10 designs.
+
+type Rgb = [number, number, number];
+const toRgb = (c: string): Rgb => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)) as Rgb;
+const toHex = (c: Rgb) => '#' + c.map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+const mix = (c: string, to: string, t: number) => {
+	const a = toRgb(c);
+	const b = toRgb(to);
+	return toHex(a.map((v, i) => v + (b[i] - v) * t) as Rgb);
+};
+const darken = (c: string, t: number) => mix(c, '#000000', t);
+const lighten = (c: string, t: number) => mix(c, '#ffffff', t);
+function hsl(h: number, s: number, l: number) {
+	const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+	const f = (n: number) => {
+		const k = (n + h / 30) % 12;
+		return Math.round(255 * (l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+	};
+	return toHex([f(0), f(8), f(4)]);
+}
+
+/** `body` is the vinyl; `a`, `b`, `c` are the artwork colours (c is the accent). */
+export interface DiscPalette {
+	body: string;
+	a: string;
+	b: string;
+	c: string;
+}
+
+export const DISC_PALETTES: DiscPalette[] = [
+	{ body: '#363636', a: '#ff4d4d', b: '#7a0000', c: '#ffd24d' }, // black / red
+	{ body: '#2c2c34', a: '#3fd0ff', b: '#0b3d91', c: '#ffffff' }, // black / cyan
+	{ body: '#1c2a5a', a: '#ffd23f', b: '#ff8c1a', c: '#ffffff' }, // navy / gold
+	{ body: '#1f4d2b', a: '#9be564', b: '#d8f3c0', c: '#ffe66d' }, // forest / lime
+	{ body: '#3b1f6b', a: '#ff5fd2', b: '#c9a7ff', c: '#ffffff' }, // purple / magenta
+	{ body: '#6a1020', a: '#ff9a3c', b: '#ffb3c1', c: '#fff1d6' }, // crimson / orange
+	{ body: '#0f4f55', a: '#5ff0e0', b: '#b8ffe8', c: '#ffffff' }, // teal / aqua
+	{ body: '#b8860b', a: '#4a2a05', b: '#fff2b8', c: '#c0392b' }, // gold / brown
+	{ body: '#e8e4d8', a: '#1a1a1a', b: '#d62828', c: '#6b6b6b' }, // cream / ink
+	{ body: '#d6559b', a: '#ffd1ec', b: '#6b1f4f', c: '#ffffff' }, // pink
+	{ body: '#c85a10', a: '#ffd23f', b: '#4a1f05', c: '#ffffff' }, // orange / yellow
+	{ body: '#44505e', a: '#7fc8ff', b: '#0b2a55', c: '#ffffff' }, // steel / sky
+	{ body: '#2a0f3d', a: '#39ff88', b: '#0a5c3a', c: '#f0ff8a' } // night / neon green
+];
+
+/** The 14th palette: a hue taken from the song, so there are many more than 13 colourways. */
+const hued = (hue: number): DiscPalette => ({
+	body: '#2e2e2e',
+	a: hsl(hue, 80, 62),
+	b: hsl((hue + 40) % 360, 85, 32),
+	c: hsl((hue + 180) % 360, 80, 72)
+});
+
+export const DISC_DESIGNS = ['classic', 'label', 'rings', 'stripes', 'checker', 'split', 'sunburst', 'dots', 'spiral', 'star'] as const;
+export type DiscDesign = (typeof DISC_DESIGNS)[number];
+
+/** The artwork at a pixel (dx, dy from the disc's centre, d from it), or null to leave plain vinyl. */
+function artwork(design: DiscDesign, p: DiscPalette, dx: number, dy: number, d: number): string | null {
+	const turn = (Math.atan2(dy, dx) + Math.PI) / (2 * Math.PI); // 0..1 around the disc
+	switch (design) {
+		case 'classic': // a small two-tone square label
+			return Math.abs(dx) <= 1.5 && Math.abs(dy) <= 1.5 ? (dy < 0 ? p.a : p.b) : null;
+		case 'label': // a big round label with an accent rim
+			return d <= 3.7 ? (d >= 3 ? p.c : dy < 0 ? p.a : p.b) : null;
+		case 'rings': // concentric coloured bands
+			if (d < 2) return p.c;
+			return d < 6.2 ? [p.a, p.b, p.c][Math.floor((d - 2) / 1.05) % 3] : null;
+		case 'stripes': // diagonal stripes
+			if (d < 1.9) return p.b;
+			return d < 6.4 && Math.floor(dx + dy + 30) % 6 < 3 ? p.a : null;
+		case 'checker': // a checkerboard
+			return d < 5.2 ? ((Math.floor((dx + 10) / 2) + Math.floor((dy + 10) / 2)) % 2 === 0 ? p.a : p.b) : null;
+		case 'split': // two halves with a divider
+			if (d >= 5.6) return null;
+			return Math.abs(dx) <= 0.5 ? p.c : dx < 0 ? p.a : p.b;
+		case 'sunburst': // alternating wedges
+			if (d < 1.6) return p.c;
+			return d < 6 ? (Math.floor(turn * 10) % 2 ? p.a : p.b) : null;
+		case 'dots': // a grid of dots
+			if (d < 1.8) return p.b;
+			return d < 6 && Math.floor(dx + 10) % 3 === 0 && Math.floor(dy + 10) % 3 === 0 ? p.a : null;
+		case 'spiral': // a spiral arm
+			if (d < 1.8) return p.b;
+			return d < 6.2 && Math.floor(d * 1.1 + turn * 2.4) % 2 === 0 ? p.a : null;
+		case 'star': { // eight rays
+			if (d < 1.8) return p.b;
+			const ax = Math.abs(dx);
+			const ay = Math.abs(dy);
+			return d < 6.2 && (ax <= 0.7 || ay <= 0.7 || Math.abs(ax - ay) <= 0.7) ? p.a : null;
+		}
+	}
+}
+
+/** One disc: a 16×16 record in `palette` with `design` on it. `seed` only varies the vinyl's grain. */
+export function paintDisc(palette: DiscPalette, design: DiscDesign, seed: number): Run[] {
 	const r = rng(seed);
+	const rim = darken(palette.body, 0.6);
+	const groove = darken(palette.body, 0.28);
+	const sheen = lighten(palette.body, 0.3);
+	const grain = lighten(palette.body, 0.08);
 	return runs(
 		grid((x, y) => {
 			const dx = x - 7.5;
 			const dy = y - 7.5;
 			const d = Math.hypot(dx, dy);
 			if (d > 7.6) return null;
-			if (d > 6.6) return '#151515';
-			if (Math.abs(dx) <= 0.5 && Math.abs(dy) <= 0.5) return '#0d0d0d';
-			if (Math.abs(dx) <= 1.5 && Math.abs(dy) <= 1.5) return dy < 0 ? label[0] : label[1];
-			if (dx < -1 && dy < -1 && d > 3.2 && d < 5.4 && r() < 0.55) return '#5a5a5a';
-			if (Math.abs(d - 4.3) < 0.5 || Math.abs(d - 5.8) < 0.4) return '#2b2b2b';
-			return r() < 0.15 ? '#424242' : '#363636';
+			if (d > 6.6) return rim;
+			if (Math.abs(dx) <= 0.5 && Math.abs(dy) <= 0.5) return '#0d0d0d'; // the spindle hole
+			const art = artwork(design, palette, dx, dy, d);
+			if (art) return art;
+			if (dx < -1 && dy < -1 && d > 3.2 && d < 5.4 && r() < 0.55) return sheen;
+			if (Math.abs(d - 4.3) < 0.5 || Math.abs(d - 5.8) < 0.4) return groove;
+			return r() < 0.15 ? grain : palette.body;
 		})
 	);
+}
+
+/** The disc for a song, from its "artist|title" key. The same song always gets the same disc. */
+export function songDisc(key: string): Run[] {
+	let h = 2166136261;
+	for (const ch of key) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+	h >>>= 0;
+	// Re-mix so the palette and the design are not locked together by the same low bits.
+	const h2 = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0;
+	const h3 = Math.imul(h2 ^ (h2 >>> 13), 3266489917) >>> 0;
+	const n = h % (DISC_PALETTES.length + 1);
+	const palette = n < DISC_PALETTES.length ? DISC_PALETTES[n] : hued(h3 % 360);
+	return paintDisc(palette, DISC_DESIGNS[h2 % DISC_DESIGNS.length], h3 % 1000);
 }
 
 /** An eighth note, 6×8, for the particles. `currentColor` takes each particle's hue. */

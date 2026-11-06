@@ -1,0 +1,55 @@
+name: Release
+
+# Builds the installers and attaches them to a GitHub Release.
+#   git tag v0.1.0 && git push origin v0.1.0
+# The tag must match the version in package.json's "version" (without the "v").
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch: # also runnable by hand from the Actions tab; builds but only uploads artifacts
+
+permissions:
+  contents: write # needed to create the Release and upload files to it
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+            files: release/Jukebox-Setup.exe
+          - os: macos-latest
+            script: dist:mac
+            files: |
+              release/Jukebox-arm64.dmg
+              release/Jukebox-x64.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run check
+
+      # electron-builder builds the installer; --publish never leaves uploading to the step below.
+      - run: npm run ${{ matrix.script }} -- --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jukebox-${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+      - name: Attach to the Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.files }}
+          generate_release_notes: true

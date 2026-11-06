@@ -225,7 +225,8 @@ function refreshTray() {
 }
 
 function buildTray() {
-	const file = join(here, '..', 'build', 'tray.png');
+	// tray.png (22px) with tray@2x.png (44px) beside it: Electron picks the Retina one by name.
+	const file = join(here, 'assets', 'tray.png');
 	const icon = existsSync(file) ? nativeImage.createFromPath(file) : nativeImage.createEmpty();
 	tray = new Tray(icon);
 	tray.setToolTip('Jukebox');
