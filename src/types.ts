@@ -19,11 +19,13 @@ export interface JukeboxBridge {
 	setVolume(v: number): void;
 	setInteractive(on: boolean): void;
 	/** Saved preferences, sent when the window loads and whenever the tray menu changes them. */
-	onPrefs(cb: (p: { onTop: boolean; openAtLogin: boolean; clickSounds?: boolean }) => void): () => void;
+	onPrefs(cb: (p: { onTop: boolean; openAtLogin: boolean; clickSounds?: boolean; boxScale?: number }) => void): () => void;
+	/** Resize the jukebox: 0.45..1, where 1 is the default and largest. `final` on release, to save it. */
+	setSize(scale: number, final?: boolean): void;
 	/** Play the game's click sound on buttons and the slider. */
 	setClickSounds(on: boolean): void;
 	/** Where the box is on its screen, as 0..1 fractions of the screen's width and height. */
-	onPlace(cb: (p: { fx: number; fy: number }) => void): () => void;
+	onPlace(cb: (p: { fx: number; fy: number; cx?: number; dw?: number }) => void): () => void;
 	setOnTop(on: boolean): void;
 	/** Start with the computer, so the jukebox is already running when Spotify opens. */
 	setLogin(on: boolean): void;

@@ -242,7 +242,20 @@
 	/** Overall shadow strength, applied to the cast shadow and both contact edges alike: 1 is the previous
 	 *  darkness, lower is lighter. The position-dependent shading below varies around this. */
 	const SHADOW_GAIN = 0.68;
-	let place = $state({ fx: 0.5, fy: 1 });
+	let place = $state<{ fx: number; fy: number; cx?: number; dw?: number }>({ fx: 0.5, fy: 1 });
+
+	// ── Keep the floating text on the screen ──
+	// The text is centred on the box and can be wider than it, so beside a screen edge its overhang is cut
+	// off. Shift it sideways just enough to fit, and not at all when there is room.
+	let lineW = $state(0);
+	const lineShift = $derived.by(() => {
+		if (place.cx === undefined || place.dw === undefined || !lineW) return 0;
+		const EDGE = 8; // keep this far from the screen edge
+		const half = lineW / 2;
+		const lo = EDGE - (place.cx - half); // least shift that keeps the left edge on screen
+		const hi = place.dw - EDGE - (place.cx + half); // most shift that keeps the right edge on screen
+		return Math.round(Math.max(lo, Math.min(hi, 0))); // as close to centred as the screen allows
+	});
 	const shadow = $derived.by(() => {
 		const dx = Math.max(-1, Math.min(1, (place.fx - 0.5) * 2)); // -1 far left .. 0 under the sun .. 1 far right
 		const t = Math.abs(dx);
@@ -336,17 +349,93 @@
 		}
 	}
 
+	// ── Size: the nub on the lid. Drag it down to shrink the jukebox, up to grow it, up to the default size ──
+	const ZOOM_MIN = 0.45; // keep in step with BOX_MIN_SCALE in electron/main.mjs
+	/**
+	 * The peg's geometry, in the cube's 32-unit viewBox. It stands on the lid's back corner (the lid's top
+	 * vertex is at 16,0): a diamond base with half-width `a`, raised by `h`. Its three visible faces are
+	 * the same shapes the cube is made of, only much smaller.
+	 */
+	const PEG = (() => {
+		const cx = 16;
+		const cy = 2.5; // base centre, on the lid: its back point touches the inner edge of the rim (y≈2), in the corner
+		const a = 0.8; // base half-width (a 1.6-unit-wide peg: ~10px at full size, down from 17px)
+		const h = 1.9; // how far it stands up
+		const pt = (x: number, y: number) => `${x.toFixed(2)},${y.toFixed(2)}`;
+		const bT: [number, number] = [cx, cy - a / 2];
+		const bR: [number, number] = [cx + a, cy];
+		const bB: [number, number] = [cx, cy + a / 2];
+		const bL: [number, number] = [cx - a, cy];
+		const up = ([x, y]: [number, number]): [number, number] => [x, y - h];
+		const [tT, tR, tB, tL] = [bT, bR, bB, bL].map(up) as [number, number][];
+		const join = (...p: [number, number][]) => p.map(([x, y]) => pt(x, y)).join(' ');
+		return {
+			left: join(bL, bB, tB, tL),
+			right: join(bB, bR, tR, tB),
+			top: join(tT, tR, tB, tL),
+			all: join(tT, tR, bR, bB, bL, tL),
+			edge: join(tL, tT, tR), // a thin light line along the top's two back edges
+			shadow: join([cx, cy - a * 0.65 + 0.35], [cx + a * 1.45, cy + 0.35], [cx, cy + a * 0.65 + 0.35], [cx - a * 1.45, cy + 0.35]),
+			hit: join([cx - a - 1, cy - h - a / 2 - 1], [cx + a + 1, cy - h - a / 2 - 1], [cx + a + 1, cy + a / 2 + 1], [cx - a - 1, cy + a / 2 + 1])
+		};
+	})();
+	let zoom = $state(1);
+	let sizeDrag: { y: number; z: number } | null = null;
+	let sizeRaf = 0;
+	/** Over how many screen pixels of dragging the size goes from smallest to largest. */
+	const SIZE_RANGE = 260;
+
+	function setZoom(z: number, final = false) {
+		zoom = Math.max(ZOOM_MIN, Math.min(1, z));
+		// The main process only needs it for hit-testing and keeping the box on-screen: once per frame while
+		// dragging, then once more with `final` on release, which also saves it.
+		cancelAnimationFrame(sizeRaf);
+		if (final) {
+			sizeRaf = 0;
+			window.jukebox?.setSize?.(zoom, true);
+			return;
+		}
+		sizeRaf = requestAnimationFrame(() => {
+			sizeRaf = 0;
+			window.jukebox?.setSize?.(zoom, false);
+		});
+	}
+	function sizeDown(e: PointerEvent) {
+		if (e.button !== 0) return;
+		playClick();
+		sizeDrag = { y: e.screenY, z: zoom };
+		(e.currentTarget as Element).setPointerCapture(e.pointerId);
+	}
+	function sizeMove(e: PointerEvent) {
+		if (!sizeDrag) return;
+		setZoom(sizeDrag.z + (sizeDrag.y - e.screenY) / SIZE_RANGE); // up is bigger
+		show(`Size: ${Math.round(zoom * 100)}%`);
+	}
+	function sizeUp() {
+		if (!sizeDrag) return;
+		sizeDrag = null;
+		setZoom(zoom, true);
+	}
+	function sizeKey(e: KeyboardEvent) {
+		const d = e.key === 'ArrowUp' || e.key === 'ArrowRight' ? 0.05 : e.key === 'ArrowDown' || e.key === 'ArrowLeft' ? -0.05 : 0;
+		if (!d) return;
+		e.preventDefault();
+		setZoom(zoom + d, true);
+		show(`Size: ${Math.round(zoom * 100)}%`);
+	}
+
 	function onPadKey(e: KeyboardEvent, cmd: 'prev' | 'next') {
 		if (e.key === 'Enter' || e.key === ' ') {
 			e.preventDefault();
 			playClick();
+			noteDirection(cmd);
 			window.jukebox?.control(cmd);
 		}
 	}
 
 	function onKey(e: KeyboardEvent) {
-		if (e.key === 'ArrowRight') window.jukebox?.control('next');
-		else if (e.key === 'ArrowLeft') window.jukebox?.control('prev');
+		if (e.key === 'ArrowRight') (noteDirection('next'), window.jukebox?.control('next'));
+		else if (e.key === 'ArrowLeft') (noteDirection('prev'), window.jukebox?.control('prev'));
 		else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') onWheel(new WheelEvent('wheel', { deltaY: e.key === 'ArrowUp' ? -1 : 1 }));
 	}
 
@@ -385,9 +474,15 @@
 	const SCHEDULE: [Phase, number][] = [['hold', 950], ['swap', 2100], ['rest', 2800], ['drop', 3400]];
 	const ANIM_END = 4000;
 	const discCache = new Map<string, Run[]>();
-	let anim = $state<{ from: Run[]; to: Run[]; phase: Phase } | null>(null);
+	/** `back`: going to the previous song, so the old disc slides out to the RIGHT and the new one slides in
+	 *  from the LEFT. Going forward is the other way round (out to the left, in from the right). */
+	let anim = $state<{ from: Run[]; to: Run[]; phase: Phase; back: boolean } | null>(null);
 	let animTimers: ReturnType<typeof setTimeout>[] = [];
 	let shownKey = '';
+	/** The last two songs, most recent last, so a change back to the song before can be told from a skip. */
+	let history: string[] = [];
+	/** The user's last button press, if it was this recent: a hint for the direction of the next change. */
+	let lastPress: { dir: 'prev' | 'next'; at: number } | null = null;
 
 	/** One song, one disc: label colours and grooves derived from "artist|title". */
 	function discFor(key: string): Run[] {
@@ -400,9 +495,9 @@
 		return d;
 	}
 
-	function runChange(from: Run[], to: Run[]) {
+	function runChange(from: Run[], to: Run[], back: boolean) {
 		animTimers.forEach(clearTimeout);
-		anim = { from, to, phase: 'pop' };
+		anim = { from, to, phase: 'pop', back };
 		animTimers = SCHEDULE.map(([phase, at]) =>
 			setTimeout(() => {
 				if (anim) anim.phase = phase;
@@ -416,10 +511,25 @@
 		if (key === shownKey) return;
 		const prev = shownKey;
 		shownKey = key;
+		// Which way did it go? The button just pressed says so directly; otherwise, if the song is the one
+		// we were on before this one, it went back (covers Spotify's own controls and the keyboard).
+		const pressed = lastPress && performance.now() - lastPress.at < 4000 ? lastPress.dir : null;
+		lastPress = null;
+		const back = pressed ? pressed === 'prev' : key !== '' && key === history[history.length - 2];
+		if (key) {
+			if (back) history.pop();
+			else history.push(key);
+			history = history.slice(-8);
+		}
 		// First song after nothing, or Spotify stopping: nothing to hand over.
 		if (!key || !prev || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-		runChange(anim ? anim.to : discFor(prev), discFor(key));
+		runChange(anim ? anim.to : discFor(prev), discFor(key), back);
 	});
+
+	/** Remember which way a track button was pressed, for the disc animation that follows. */
+	function noteDirection(dir: 'prev' | 'next') {
+		lastPress = { dir, at: performance.now() };
+	}
 
 	onMount(() => () => animTimers.forEach(clearTimeout));
 	// Optional-call: a window still running an older preload has no onPrefs, and a throw here would stop
@@ -429,6 +539,7 @@
 			onTop = p.onTop;
 			loginOn = p.openAtLogin;
 			clickSounds = p.clickSounds ?? true;
+			if (!sizeDrag && p.boxScale) zoom = Math.max(ZOOM_MIN, Math.min(1, p.boxScale));
 		})
 	);
 
@@ -441,7 +552,7 @@
 	});
 </script>
 
-<div class="stage" class:stage--playing={playing} class:stage--drop={anim?.phase === 'drop'}>
+<div class="stage" class:stage--playing={playing} class:stage--drop={anim?.phase === 'drop'} style="--zoom: {zoom}">
 	<p
 		class="line"
 		class:line--flash={!!flash}
@@ -449,6 +560,8 @@
 		class:line--show={!!flash || !!warning || songShown}
 		aria-hidden={songShown && !flash && !warning}
 		aria-live="polite"
+		bind:clientWidth={lineW}
+		style="--linex: {lineShift}px"
 	>
 		{#if flash ?? warning}
 			{flash ?? warning}
@@ -621,7 +734,7 @@
 							aria-label={pad.label}
 							onpointerenter={() => interactive(true)}
 							onpointerleave={() => interactive(false)}
-							onclick={() => (playClick(), window.jukebox?.control(pad.cmd))}
+							onclick={() => (playClick(), noteDirection(pad.cmd), window.jukebox?.control(pad.cmd))}
 							onkeydown={(e) => onPadKey(e, pad.cmd)}
 						>
 							<rect class="pad__hit" x="-1.5" y="-1.5" width="9" height="10" fill="transparent" />
@@ -634,6 +747,39 @@
 						</g>
 					</g>
 				{/each}
+			</g>
+			<!-- Resize peg: a small blank wooden peg standing up from the lid's back corner. Drawn in the cube's own
+			     32-unit space as three faces (lit top, shaded left and right) the way the cube is, so it reads as 3D. -->
+			<g
+				class="pad nub"
+				role="slider"
+				tabindex="0"
+				aria-label="Jukebox size"
+				aria-orientation="vertical"
+				aria-valuemin={Math.round(ZOOM_MIN * 100)}
+				aria-valuemax="100"
+				aria-valuenow={Math.round(zoom * 100)}
+				onpointerenter={() => interactive(true)}
+				onpointerleave={() => {
+					if (!sizeDrag) interactive(false);
+				}}
+				onpointerdown={sizeDown}
+				onpointermove={sizeMove}
+				onpointerup={sizeUp}
+				onpointercancel={sizeUp}
+				onkeydown={sizeKey}
+			>
+				<polygon class="pad__hit" points={PEG.hit} fill="transparent" />
+				<!-- where the peg meets the lid: a soft dark patch on the wood -->
+				<polygon points={PEG.shadow} fill="#000" opacity="0.38" />
+				<g class="pad__body">
+					<polygon points={PEG.left} fill="#8a5330" />
+					<polygon points={PEG.right} fill="#573320" />
+					<polygon points={PEG.top} fill="#cf935f" />
+					<polyline points={PEG.edge} fill="none" stroke="#e8b283" stroke-width="0.25" stroke-linejoin="round" />
+					<polygon class="pad__shade" points={PEG.all} fill="#000" opacity="0.14" />
+					<polygon class="pad__focus" points={PEG.all} fill="none" stroke="#fff" stroke-width="0.4" stroke-linejoin="round" />
+				</g>
 			</g>
 		</svg>
 		</div>
@@ -648,7 +794,7 @@
 		</span>
 
 		{#if anim}
-			<div class="drive" data-phase={anim.phase} aria-hidden="true">
+			<div class="drive" data-phase={anim.phase} data-back={anim.back} aria-hidden="true">
 				<div class="disc disc--from">
 					<svg viewBox="0 0 16 16" shape-rendering="crispEdges">
 						{#each anim.from as p, i (i)}<rect x={p.x} y={p.y} width={p.w} height="1" fill={p.c} />{/each}
@@ -712,7 +858,7 @@
 		padding-bottom: 64px;
 		/* Everything is sized from --k, the block's scale against portfolioSite's 104px jukebox, so
 		   the notes keep that project's proportions (18x24px, rising 64px, drifting 30px at 104px). */
-		--k: 1.923;
+		--k: calc(1.923 * var(--zoom, 1)); /* --zoom is the user's size, 0.45..1; 1 is the default and largest */
 		--size: calc(104px * var(--k));
 	}
 
@@ -738,6 +884,10 @@
 			1px -1px 0 rgba(0, 0, 0, 0.55);
 		opacity: 0;
 		transform: translateY(4px);
+		/* Slid back onto the screen near its left/right edges (see `lineShift`). The separate `translate`
+		   property composes with the fade's `transform`, and is deliberately not transitioned so the text
+		   stays inside the screen while the box is being dragged. */
+		translate: var(--linex, 0px) 0;
 		transition:
 			opacity 0.2s steps(4),
 			transform 0.2s steps(4);
@@ -1099,6 +1249,15 @@
 		cursor: pointer;
 	}
 
+	.nub {
+		cursor: ns-resize;
+	}
+
+	/* Pressed, the peg sinks into the lid a little instead of sliding sideways like the flat buttons. */
+	.nub.pad:active .pad__body {
+		transform: translate(0, 0.5px);
+	}
+
 	.pad--off {
 		opacity: 0.55;
 	}
@@ -1256,6 +1415,16 @@
 		will-change: transform, opacity;
 	}
 
+	/* Going back (data-back="true") mirrors it: the old disc slides out to the right, the new one in from the
+	   left. --dir is 1 going forward and -1 going back, and flips the sign of both slides. */
+	.drive {
+		--dir: 1;
+	}
+
+	.drive[data-back='true'] {
+		--dir: -1;
+	}
+
 	@keyframes out-left {
 		from {
 			opacity: 1;
@@ -1263,14 +1432,14 @@
 		}
 		to {
 			opacity: 0;
-			transform: translate(calc(var(--slide) * -1), calc(var(--lift) * -1));
+			transform: translate(calc(var(--slide) * var(--dir) * -1), calc(var(--lift) * -1));
 		}
 	}
 
 	@keyframes in-right {
 		from {
 			opacity: 0;
-			transform: translate(var(--slide), calc(var(--lift) * -1));
+			transform: translate(calc(var(--slide) * var(--dir)), calc(var(--lift) * -1));
 		}
 		to {
 			opacity: 1;

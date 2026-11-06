@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('jukebox', {
 	},
 	setOnTop: (on) => ipcRenderer.send('jukebox:on-top', !!on),
 	setLogin: (on) => ipcRenderer.send('jukebox:login', !!on),
+	setSize: (scale, final) => ipcRenderer.send('jukebox:size', scale, !!final),
 	setClickSounds: (on) => ipcRenderer.send('jukebox:click-sounds', !!on),
 	quit: () => ipcRenderer.send('jukebox:quit'),
 	dragStart: () => ipcRenderer.send('jukebox:drag-start'),

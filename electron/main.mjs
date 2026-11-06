@@ -18,12 +18,17 @@ const WIDTH = 480; // the shadow reaches ~94px past the box at a screen edge, pl
 // The window is mostly empty space around the box: room above for the disc's flight and the song
 // tooltip, and BOTTOM_PAD below for the shadow. The box (BOX px square) is centred, BOTTOM_PAD up from
 // the bottom. BOTTOM_PAD must match `.stage { padding-bottom }` in src/App.svelte.
-const BOX = 200;
+const BOX_MAX = 200; // the box at full size: the default, and the largest it can be
+const BOX_MIN_SCALE = 0.45; // the smallest the user can shrink it to
 const BOTTOM_PAD = 64;
 const HEIGHT = 564;
 const MARGIN = 16;
-const BOX_LEFT = (WIDTH - BOX) / 2; // the box's left edge, from the window's left
-const BOX_TOP = HEIGHT - BOTTOM_PAD - BOX; // the box's top edge, from the window's top
+// The window never changes size; the box is anchored bottom-centre inside it and scales from there, so
+// resizing does not move the box's base.
+let boxScale = 1;
+const boxPx = () => Math.round(BOX_MAX * boxScale);
+const boxLeft = () => (WIDTH - boxPx()) / 2; // the box's left edge, from the window's left
+const boxTop = () => HEIGHT - BOTTOM_PAD - boxPx(); // the box's top edge, from the window's top
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -33,8 +38,8 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
  */
 function clampBox(x, y, area) {
 	return {
-		x: clamp(x, area.x - BOX_LEFT, area.x + area.width - BOX_LEFT - BOX),
-		y: clamp(y, area.y - BOX_TOP, area.y + area.height - BOX_TOP - BOX)
+		x: clamp(x, area.x - boxLeft(), area.x + area.width - boxLeft() - boxPx()),
+		y: clamp(y, area.y - boxTop(), area.y + area.height - boxTop() - boxPx())
 	};
 }
 const DEV_URL = process.env.VITE_DEV_URL;
@@ -54,7 +59,7 @@ const prefsFile = () => join(app.getPath('userData'), 'prefs.json');
 
 /** Saved settings. `onTop`: keep the jukebox in front of other windows. `openAtLogin`: start with the
  *  computer, so the jukebox is already running whenever Spotify launches. */
-let prefs = { onTop: true, openAtLogin: false, clickSounds: true };
+let prefs = { onTop: true, openAtLogin: false, clickSounds: true, boxScale: 1 };
 
 function loadPrefs() {
 	try {
@@ -62,6 +67,8 @@ function loadPrefs() {
 	} catch {
 		// first run: defaults
 	}
+	boxScale = clamp(Number(prefs.boxScale) || 1, BOX_MIN_SCALE, 1);
+	prefs.boxScale = boxScale;
 	// Once installed, the OS is the source of truth for the login item (the user can change it there).
 	if (app.isPackaged) prefs.openAtLogin = app.getLoginItemSettings().openAtLogin;
 }
@@ -113,7 +120,7 @@ function savedPosition() {
 function defaultPosition() {
 	const area = screen.getPrimaryDisplay().workArea;
 	// Bottom right: the box MARGIN px in from the work area's right and bottom edges.
-	return { x: area.x + area.width - BOX_LEFT - BOX - MARGIN, y: area.y + area.height - BOX_TOP - BOX - MARGIN };
+	return { x: area.x + area.width - boxLeft() - boxPx() - MARGIN, y: area.y + area.height - boxTop() - boxPx() - MARGIN };
 }
 
 function createWindow() {
@@ -185,8 +192,12 @@ function sendPlace() {
 	const b = win.getBounds();
 	const d = screen.getDisplayMatching(b).bounds;
 	win.webContents.send('jukebox:place', {
+		// Pixels, so the UI can keep its text on this screen: the box's centre from the screen's left edge,
+		// and the screen's width.
+		cx: b.x + b.width / 2 - d.x,
+		dw: d.width,
 		fx: (b.x + b.width / 2 - d.x) / d.width,
-		fy: (b.y + b.height - BOTTOM_PAD - BOX / 2 - d.y) / d.height // the box's vertical centre
+		fy: (b.y + b.height - BOTTOM_PAD - boxPx() / 2 - d.y) / d.height // the box's vertical centre
 	});
 }
 
@@ -244,6 +255,21 @@ app.whenReady().then(() => {
 		if (last) e.sender.send('jukebox:state', last);
 	});
 	ipcMain.on('jukebox:on-top', (_e, on) => setOnTop(on));
+	// The user is dragging the nub on the lid. `final` is the release: save it, and pull the box back
+	// on-screen if growing it pushed an edge off the display.
+	ipcMain.on('jukebox:size', (_e, scale, final) => {
+		if (!win) return;
+		boxScale = clamp(Number(scale) || 1, BOX_MIN_SCALE, 1);
+		if (final) {
+			prefs.boxScale = boxScale;
+			savePrefs();
+			const [x, y] = win.getPosition();
+			const c = clampBox(x, y, screen.getDisplayMatching(win.getBounds()).workArea);
+			if (c.x !== x || c.y !== y) win.setPosition(c.x, c.y);
+			savePosition();
+		}
+		sendPlace();
+	});
 	ipcMain.on('jukebox:login', (_e, on) => setLogin(on));
 	ipcMain.on('jukebox:click-sounds', (_e, on) => {
 		prefs.clickSounds = !!on;
