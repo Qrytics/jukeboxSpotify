@@ -1,0 +1,41 @@
+export interface SpotifyState {
+	/** Is the Spotify desktop app running at all. */
+	running: boolean;
+	status: 'playing' | 'paused' | 'stopped';
+	title: string;
+	artist: string;
+	album: string;
+	artUrl: string | null;
+	durationMs: number;
+	positionMs: number;
+	/** 0..1, or null when the OS gives no way to read it (Windows). */
+	volume: number | null;
+	error: 'permission' | 'unavailable' | null;
+}
+
+export interface JukeboxBridge {
+	onState(cb: (s: SpotifyState) => void): () => void;
+	control(cmd: 'toggle' | 'next' | 'prev'): void;
+	setVolume(v: number): void;
+	setInteractive(on: boolean): void;
+	/** Saved preferences, sent when the window loads and whenever the tray menu changes them. */
+	onPrefs(cb: (p: { onTop: boolean; openAtLogin: boolean; clickSounds?: boolean }) => void): () => void;
+	/** Play the game's click sound on buttons and the slider. */
+	setClickSounds(on: boolean): void;
+	/** Where the box is on its screen, as 0..1 fractions of the screen's width and height. */
+	onPlace(cb: (p: { fx: number; fy: number }) => void): () => void;
+	setOnTop(on: boolean): void;
+	/** Start with the computer, so the jukebox is already running when Spotify opens. */
+	setLogin(on: boolean): void;
+	/** Quit the whole program. */
+	quit(): void;
+	dragStart(): void;
+	dragMove(dx: number, dy: number): void;
+	dragEnd(): void;
+}
+
+declare global {
+	interface Window {
+		jukebox?: JukeboxBridge;
+	}
+}

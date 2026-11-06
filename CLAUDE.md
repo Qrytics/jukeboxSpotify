@@ -1,9 +1,10 @@
-# jukeboxSpotify
+# Jukebox
 
-Standalone SvelteKit app: the Spotify pop-out widget reskinned as a Minecraft jukebox.
-Forked from the jukebox in `~/gitProjects/portfolioSite` (`src/lib/components/jukebox/`).
+Electron + Svelte 5 + Vite desktop overlay: a Minecraft jukebox that shows when Spotify runs. macOS and Windows.
 
-- The widget is still wired to the **SoundCloud Widget API** (inherited). Moving playback to Spotify is the main open task.
-- `soundPref.svelte.ts` is a stub (always enabled); the portfolio's real one is tied to its sound manager.
-- Pixel art is generated in `pixels.ts`, not shipped as images. Keep it that way.
-- Run `npm run check` before committing.
+- The UI is ONLY the jukebox block on a transparent window. No panel, no background, no title bar. Keep it that way.
+- Click-through: the renderer calls `setInteractive` on pointer enter/leave of the block; the window ignores mouse events otherwise.
+- Spotify access lives in `electron/spotify/` behind one interface: `start(onState)`, `stop()`, `control('toggle'|'next'|'prev')`, `setVolume(0..1)`. State shape is `SpotifyState` in `src/types.ts`.
+- Pixel art is generated in `src/pixels.ts`, not shipped as images.
+- No Spotify web API / OAuth. Do not add one.
+- Run `npm run check` and `npm run build` before committing.

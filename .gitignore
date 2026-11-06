@@ -1,38 +1,8 @@
 node_modules
-
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit
-/build
-
-# OS
+dist
+release
 .DS_Store
 Thumbs.db
-
-# Env
 .env
 .env.*
-!.env.example
-!.env.test
-
-# Vite
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
-.env*
-
-# Screenshot output from scripts/verify-chart.mjs
 .verify/
-
-# Re-asserted after the `.env*` above, which is a later pattern than the `!.env.example` in the Env
-# section and would otherwise win. `.env.example` is a committed template with no secrets in it; the
-# real `.env` (GH_TOKEN, TUNNEL_TOKEN) lives only on the Pi at mode 600.
-!.env.example
-
-# Screenshot output from scripts/snapshot-site.mjs
-.snapshots/
-
-# Hand-edited head frames: the generated preview page is rebuilt from the text files
-/scripts/head-frames/preview.html

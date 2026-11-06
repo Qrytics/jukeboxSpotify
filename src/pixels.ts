@@ -35,6 +35,77 @@ const grid = (fn: (x: number, y: number) => string | null) =>
 
 const EDGE = '#24180f';
 
+/**
+ * A small wooden push-button, 6×7, drawn flat. It is placed inside the box's right-face transform,
+ * so it picks up that face's skew and sits on it in perspective. Plank-lit on the top and left edge,
+ * shaded on the bottom and right, with two plank seams of grain and a 4-pixel arrow pressed into it.
+ */
+export function padSprite(dir: 'prev' | 'next'): Run[] {
+	// Horizontal planks: two lighter boards over a darker one, so it reads as cut timber, not a frame.
+	const plank = (y: number) => (y <= 2 ? '#b9774b' : y <= 4 ? '#a7643f' : '#94562f');
+	const ARROW = '#24120a';
+	const arrow = new Set(dir === 'next' ? ['2,2', '2,3', '2,4', '3,3'] : ['3,2', '3,3', '3,4', '2,3']);
+	return runs(
+		Array.from({ length: 7 }, (_, y) =>
+			Array.from({ length: 6 }, (_, x) => {
+				if (arrow.has(`${x},${y}`)) return ARROW;
+				if (y === 0 || x === 0) return '#d9a074'; // lit edge
+				if (y === 6 || x === 5) return '#4a2a17'; // shaded edge
+				return (x * 3 + y) % 5 === 0 ? '#8a5330' : plank(y); // plank, with a few grain flecks
+			})
+		)
+	);
+}
+
+/**
+ * A 10×11 wooden button with an icon, for the tools on the left face (drawn at 0.3 scale, so about the
+ * size of the arrow buttons). Same plank look as `padSprite`; the icon sits in the 8×9 inside the rim.
+ *   cog – a cogwheel
+ */
+export function iconPadSprite(_icon: 'cog'): Run[] {
+	const W = 10;
+	const H = 11;
+	const plank = (y: number) => (y <= 3 ? '#b9774b' : y <= 6 ? '#a7643f' : '#94562f');
+	const INK = '#24120a';
+	const px = new Map<string, string>();
+	// 7×7, symmetric about its centre pixel: 1px teeth N/E/S/W, 2px teeth at the four corners (thicker
+	// than a single pixel, much slimmer than a 2×2 block). The middle is one open pixel ringed by four
+	// mid-brown ones ('+'): a hub that is lighter than the black ring but not a blank hole.
+	const GEAR = ['##.#.##', '.#####.', '.##+##.', '##+.+##', '.##+##.', '.#####.', '##.#.##'];
+	GEAR.forEach((row, gy) =>
+		[...row].forEach((ch, gx) => {
+			if (ch === '#') px.set(`${1 + gx},${2 + gy}`, INK);
+			else if (ch === '+') px.set(`${1 + gx},${2 + gy}`, '#7a4a2c');
+		})
+	);
+
+	return runs(
+		Array.from({ length: H }, (_, y) =>
+			Array.from({ length: W }, (_, x) => {
+				const inked = px.get(`${x},${y}`);
+				if (inked) return inked;
+				if (y === 0 || x === 0) return '#d9a074'; // lit edge
+				if (y === H - 1 || x === W - 1) return '#4a2a17'; // shaded edge
+				return (x * 3 + y) % 5 === 0 ? '#8a5330' : plank(y); // plank, with a few grain flecks
+			})
+		)
+	);
+}
+
+/** The volume slider's knob, 4×3: a small wooden plank, lit on top and left, shaded below and right. */
+export function knobSprite(): Run[] {
+	const wood = ['#b06d45', '#a7643f', '#b9774b'];
+	return runs(
+		Array.from({ length: 3 }, (_, y) =>
+			Array.from({ length: 4 }, (_, x) => {
+				if (y === 0 || x === 0) return '#d2956a';
+				if (y === 2 || x === 3) return '#6b3d24';
+				return wood[(x * 2 + y) % wood.length];
+			})
+		)
+	);
+}
+
 /** A side of the box: a dark frame around a lattice of diamonds on mottled wood. */
 export function sideFace(): Run[] {
 	const r = rng(7);

@@ -1,24 +1,48 @@
 {
-	"name": "jukebox-spotify",
+	"name": "jukebox",
+	"productName": "Jukebox",
+	"version": "0.1.0",
+	"description": "A Minecraft-style jukebox mini-player that opens by itself when Spotify does.",
 	"private": true,
-	"version": "0.0.1",
 	"type": "module",
+	"main": "electron/main.mjs",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "node scripts/dev.mjs",
+		"dev:mock": "JUKEBOX_MOCK=1 node scripts/dev.mjs",
 		"build": "vite build",
-		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+		"start": "npm run build && electron .",
+		"check": "svelte-check --tsconfig ./tsconfig.json",
+		"icons": "node scripts/make-icons.mjs",
+		"dist:mac": "npm run build && electron-builder --mac",
+		"dist:win": "npm run build && electron-builder --win"
 	},
-	"engines": { "node": ">=20" },
+	"engines": { "node": ">=22" },
+	"dependencies": {
+		"@fontsource-variable/pixelify-sans": "^5.2.0"
+	},
 	"devDependencies": {
-		"@fontsource-variable/jetbrains-mono": "^5.3.0",
-		"@sveltejs/adapter-vercel": "^6.3.3",
-		"@sveltejs/kit": "^2.50.2",
 		"@sveltejs/vite-plugin-svelte": "^6.2.4",
+		"electron": "^45.2.3",
+		"electron-builder": "^26.18.0",
 		"svelte": "^5.51.0",
 		"svelte-check": "^4.4.2",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.1"
+	},
+	"build": {
+		"appId": "com.qrytics.jukebox",
+		"productName": "Jukebox",
+		"directories": { "output": "release", "buildResources": "build" },
+		"files": ["electron/**", "dist/renderer/**", "package.json"],
+		"mac": {
+			"category": "public.app-category.music",
+			"target": ["dmg", "zip"],
+			"extendInfo": {
+				"LSUIElement": true,
+				"NSAppleEventsUsageDescription": "Jukebox reads what Spotify is playing and sends it play, pause and skip commands."
+			}
+		},
+		"win": { "target": ["nsis"] },
+		"nsis": { "oneClick": true, "perMachine": false }
 	}
 }
