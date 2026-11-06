@@ -1,7 +1,7 @@
 # Windows bridge: long-running Windows PowerShell 5.1 process.
 # Reads Spotify's now-playing state from the Windows media session (the same source as the volume
-# flyout) and prints one JSON line per half second. Reads commands (toggle | next | prev) from stdin.
-# Exits when stdin closes, i.e. when Jukebox quits.
+# flyout) and prints one JSON line per half second. Reads commands (toggle | next | prev | focus | vol) from stdin.
+# (volumes look like `vol 0.5`). Exits when stdin closes, i.e. when Jukebox quits.
 #
 # Each pass of the loop is wrapped in try/catch: one failed Windows call used to end the whole script,
 # which hid the jukebox and relaunched it every 3 seconds. Now the failure is reported as `error` and the
@@ -162,6 +162,7 @@ public static class WinFocus {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int cmd);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 }
 '@
 $FocusOK = $false
@@ -170,12 +171,15 @@ try { Add-Type -TypeDefinition $FocusCs -Language CSharp; $FocusOK = $true } cat
 function Focus-Spotify {
 	$p = Get-Process -Name Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
 	if ($p -and $FocusOK) {
-		# A toggle: a window that is showing gets minimized; a minimized one is restored and raised.
+		# A toggle: a minimized window is restored and raised; the frontmost window is minimized; a window that is merely behind others is raised, never hidden.
 		if ([WinFocus]::IsIconic($p.MainWindowHandle)) {
 			[void][WinFocus]::ShowWindow($p.MainWindowHandle, 9)
 			[void][WinFocus]::SetForegroundWindow($p.MainWindowHandle)
-		} else {
+		} elseif ([WinFocus]::GetForegroundWindow() -eq $p.MainWindowHandle) {
 			[void][WinFocus]::ShowWindow($p.MainWindowHandle, 6)
+		} else {
+			[void][WinFocus]::ShowWindow($p.MainWindowHandle, 9)
+			[void][WinFocus]::SetForegroundWindow($p.MainWindowHandle)
 		}
 	} else {
 		Start-Process 'spotify:'
@@ -228,7 +232,7 @@ while ($true) {
 				}
 			} else {
 				$s = Get-SpotifySession
-				if ($s) {
+				if ($cmdText -eq 'focus') { try { Focus-Spotify } catch { } } elseif ($s) {
 					switch ($cmdText) {
 						'toggle' { [void](Await ($s.TryTogglePlayPauseAsync()) ([bool])) }
 						'next' { [void](Await ($s.TrySkipNextAsync()) ([bool])) }

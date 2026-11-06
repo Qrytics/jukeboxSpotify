@@ -211,6 +211,7 @@
 	/** Tuck the jukebox away; clicking its tray / menu-bar icon brings it back. */
 	function minimize() {
 		window.jukebox?.minimize?.();
+		window.jukebox?.setInteractive?.(false); // the window hides at once, so no pointerleave will fire
 		overBlock = false;
 	}
 
